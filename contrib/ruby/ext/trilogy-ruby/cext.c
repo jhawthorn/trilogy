@@ -92,6 +92,18 @@ static void trilogy_syserr_fail_str(int e, VALUE msg)
     }
 }
 
+static VALUE openssl_print_errors_ruby_str(void)
+{
+    BIO *bio = BIO_new(BIO_s_mem());
+    ERR_print_errors(bio);
+    char *buf;
+    size_t len = BIO_get_mem_data(bio, &buf);
+    VALUE ret = rb_str_new(buf, len);
+    BIO_free(bio);
+    return ret;
+}
+
+
 NORETURN(static void handle_trilogy_error(struct trilogy_ctx *, int, const char *, ...));
 static void handle_trilogy_error(struct trilogy_ctx *ctx, int rc, const char *msg, ...)
 {
@@ -111,7 +123,8 @@ static void handle_trilogy_error(struct trilogy_ctx *ctx, int rc, const char *ms
     }
 
     case TRILOGY_OPENSSL_ERR: {
-        unsigned long ossl_error = ERR_get_error();
+        unsigned long ossl_error = ERR_peek_error();
+        VALUE full_error_str = openssl_print_errors_ruby_str();
         ERR_clear_error();
         if (ERR_GET_LIB(ossl_error) == ERR_LIB_SYS) {
             int err_reason = ERR_GET_REASON(ossl_error);
@@ -122,7 +135,7 @@ static void handle_trilogy_error(struct trilogy_ctx *ctx, int rc, const char *ms
         if (ctx->conn.socket != NULL) {
             trilogy_sock_shutdown(ctx->conn.socket);
         }
-        rb_raise(Trilogy_SSLError, "%" PRIsVALUE ": SSL Error: %s", rbmsg, ERR_reason_error_string(ossl_error));
+        rb_raise(Trilogy_SSLError, "%" PRIsVALUE ": SSL Error: %s\n%" PRIsVALUE, rbmsg, ERR_reason_error_string(ossl_error), full_error_str);
     }
 
     case TRILOGY_DNS_ERR: {
