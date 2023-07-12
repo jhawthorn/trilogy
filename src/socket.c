@@ -306,7 +306,7 @@ fail:
 
 static ssize_t ssl_io_return(struct trilogy_sock *sock, ssize_t ret)
 {
-    if (ret < 0) {
+    if (ret <= 0) {
         int rc = SSL_get_error(sock->ssl, (int)ret);
         if (rc == SSL_ERROR_WANT_WRITE || rc == SSL_ERROR_WANT_READ) {
             return (ssize_t)TRILOGY_AGAIN;
