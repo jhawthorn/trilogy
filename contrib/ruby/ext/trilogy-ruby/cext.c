@@ -112,6 +112,12 @@ static void handle_trilogy_error(struct trilogy_ctx *ctx, int rc, const char *ms
     VALUE rbmsg = rb_vsprintf(msg, args);
     va_end(args);
 
+    unsigned long ossl_error = ERR_peek_error();
+    if (ossl_error && rc != TRILOGY_OPENSSL_ERR) {
+        fprintf(stderr, "TRILOGY handle_trilogy_error: SSL error in queue\n");
+        ERR_print_errors_fp(stderr);
+    }
+
     switch (rc) {
     case TRILOGY_SYSERR:
         trilogy_syserr_fail_str(errno, rbmsg);
