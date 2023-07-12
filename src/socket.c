@@ -320,6 +320,10 @@ static ssize_t ssl_io_return(struct trilogy_sock *sock, ssize_t ret)
 
 static ssize_t _cb_ssl_read(trilogy_sock_t *_sock, void *buf, size_t nread)
 {
+    if (ERR_peek_error()) {
+        fprintf(stderr, "TRILOGY ssl_read: SSL error in queue\n");
+        ERR_print_errors_fp(stderr);
+    }
     struct trilogy_sock *sock = (struct trilogy_sock *)_sock;
     ssize_t data_read = (ssize_t)SSL_read(sock->ssl, buf, (int)nread);
     return ssl_io_return(sock, data_read);
@@ -327,6 +331,10 @@ static ssize_t _cb_ssl_read(trilogy_sock_t *_sock, void *buf, size_t nread)
 
 static ssize_t _cb_ssl_write(trilogy_sock_t *_sock, const void *buf, size_t nwrite)
 {
+    if (ERR_peek_error()) {
+        fprintf(stderr, "TRILOGY ssl_write: SSL error in queue\n");
+        ERR_print_errors_fp(stderr);
+    }
     struct trilogy_sock *sock = (struct trilogy_sock *)_sock;
     ssize_t data_written = (ssize_t)SSL_write(sock->ssl, buf, (int)nwrite);
     return ssl_io_return(sock, data_written);
