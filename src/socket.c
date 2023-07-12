@@ -310,8 +310,14 @@ static ssize_t ssl_io_return(struct trilogy_sock *sock, ssize_t ret)
         int rc = SSL_get_error(sock->ssl, (int)ret);
         if (rc == SSL_ERROR_WANT_WRITE || rc == SSL_ERROR_WANT_READ) {
             return (ssize_t)TRILOGY_AGAIN;
-        } else if (rc == SSL_ERROR_SYSCALL && errno != 0) {
-            return (ssize_t)TRILOGY_SYSERR;
+        } else if (rc == SSL_ERROR_SYSCALL && !ERR_peek_error()) {
+            if (errno != 0) {
+                return (ssize_t)TRILOGY_SYSERR;
+            } else if (ret == 0) {
+                // On OpenSSL <= 1.1.1, SSL_ERROR_SYSCALL with an errno value
+                // of 0 indicates unexpected EOF from the peer.
+                return (ssize_t)TRILOGY_CLOSED_CONNECTION;
+            }
         }
         return (ssize_t)TRILOGY_OPENSSL_ERR;
     }
