@@ -372,6 +372,15 @@ static int _cb_ssl_close(trilogy_sock_t *_sock)
     if (sock->ssl != NULL) {
         if (SSL_in_init(sock->ssl) == 0) {
             SSL_shutdown(sock->ssl);
+
+            // Our callback API doesn't allow for reporting errors here, and to perform this properly we may need to
+            // retry if we receive SSL_ERROR_WANT_READ/SSL_ERROR_WANT_WRITE
+            // Instead, just clear errors for now.
+            //ERR_clear_error();
+            if (ERR_peek_error()) {
+                fprintf(stderr, "TRILOGY _cb_ssl_close: SSL error in queue\n");
+                ERR_print_errors_fp(stderr);
+            }
         }
         SSL_free(sock->ssl);
         sock->ssl = NULL;

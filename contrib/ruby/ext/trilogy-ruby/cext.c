@@ -800,6 +800,11 @@ static VALUE execute_read_query_response(struct trilogy_ctx *ctx)
     // If we have seen an unexpected exception, jump to it so it gets raised.
     if (state) {
         trilogy_sock_shutdown(ctx->conn.socket);
+        //ERR_clear_error();
+        if (ERR_peek_error()) {
+            fprintf(stderr, "TRILOGY execute_read_query_response: SSL error in queue\n");
+            ERR_print_errors_fp(stderr);
+        }
         rb_jump_tag(state);
     }
 
@@ -938,7 +943,18 @@ static VALUE rb_trilogy_close(VALUE self)
         }
     }
 
+    // TODO: Can we better report other errors here?
+    //ERR_clear_error();
+    if (ERR_peek_error()) {
+        fprintf(stderr, "TRILOGY rb_trilogy_close (before free): SSL error in queue\n");
+        ERR_print_errors_fp(stderr);
+    }
+
     trilogy_free(&ctx->conn);
+    if (ERR_peek_error()) {
+        fprintf(stderr, "TRILOGY rb_trilogy_close (after free): SSL error in queue\n");
+        ERR_print_errors_fp(stderr);
+    }
 
     return Qnil;
 }
