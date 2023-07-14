@@ -124,6 +124,9 @@ static void handle_trilogy_error(struct trilogy_ctx *ctx, int rc, const char *ms
     case TRILOGY_SYSERR:
         trilogy_syserr_fail_str(errno, rbmsg);
 
+    case TRILOGY_CLOSED_CONNECTION:
+        rb_raise(Trilogy_ConnectionClosedError, "%" PRIsVALUE, rbmsg);
+
     case TRILOGY_ERR: {
         VALUE message = rb_str_new(ctx->conn.error_message, ctx->conn.error_message_len);
         VALUE exc = rb_funcall(Trilogy_ProtocolError, id_from_code, 2, message, INT2NUM(ctx->conn.error_code));
