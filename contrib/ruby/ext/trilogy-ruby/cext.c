@@ -86,6 +86,8 @@ static void trilogy_syserr_fail_str(int e, VALUE msg)
         rb_raise(Trilogy_ConnectionRefusedError, "%" PRIsVALUE, msg);
     } else if (e == ECONNRESET) {
         rb_raise(Trilogy_ConnectionResetError, "%" PRIsVALUE, msg);
+    } else if (e == EPIPE) {
+        rb_raise(Trilogy_ConnectionClosedError, "%" PRIsVALUE, msg);
     } else {
         // TODO: All syserr should be wrapped.
         rb_syserr_fail_str(e, msg);
