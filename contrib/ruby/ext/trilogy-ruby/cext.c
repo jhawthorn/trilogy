@@ -132,14 +132,14 @@ static void handle_trilogy_error(struct trilogy_ctx *ctx, int rc, const char *ms
         unsigned long ossl_error = ERR_peek_error();
         VALUE full_error_str = openssl_print_errors_ruby_str();
         ERR_clear_error();
-        if (ERR_GET_LIB(ossl_error) == ERR_LIB_SYS) {
-            int err_reason = ERR_GET_REASON(ossl_error);
-            trilogy_syserr_fail_str(err_reason, rbmsg);
-        }
         // We can't recover from OpenSSL level errors if there's
         // an active connection.
         if (ctx->conn.socket != NULL) {
             trilogy_sock_shutdown(ctx->conn.socket);
+        }
+        if (ERR_GET_LIB(ossl_error) == ERR_LIB_SYS) {
+            int err_reason = ERR_GET_REASON(ossl_error);
+            trilogy_syserr_fail_str(err_reason, rbmsg);
         }
         rb_raise(Trilogy_SSLError, "%" PRIsVALUE ": SSL Error: %s\n%" PRIsVALUE, rbmsg, ERR_reason_error_string(ossl_error), full_error_str);
     }
