@@ -316,13 +316,22 @@ fail:
     return TRILOGY_ERR;
 }
 
+static int record_ssl_error(struct trilogy_sock *sock) {
+    sock->last_error.status = TRILOGY_OPENSSL_ERR;
+    sock->last_error.ssl_error = ERR_get_error();
+    sock->last_error._errno = errno;
+    ERR_clear_error(); // just in case there are more errors in the queue
+
+    return TRILOGY_OPENSSL_ERR;
+}
+
 static ssize_t ssl_io_return(struct trilogy_sock *sock, ssize_t ret)
 {
     if (ret <= 0) {
         int rc = SSL_get_error(sock->ssl, (int)ret);
         if (rc == SSL_ERROR_WANT_WRITE || rc == SSL_ERROR_WANT_READ) {
             return (ssize_t)TRILOGY_AGAIN;
-        } else if (rc == SSL_ERROR_SYSCALL && !ERR_peek_error()) {
+        }/* else if (rc == SSL_ERROR_SYSCALL && !ERR_peek_error()) {
             if (errno != 0) {
                 return (ssize_t)TRILOGY_SYSERR;
             } else if (ret == 0) {
@@ -330,8 +339,9 @@ static ssize_t ssl_io_return(struct trilogy_sock *sock, ssize_t ret)
                 // of 0 indicates unexpected EOF from the peer.
                 return (ssize_t)TRILOGY_CLOSED_CONNECTION;
             }
-        }
-        return (ssize_t)TRILOGY_OPENSSL_ERR;
+        }*/
+
+        return (ssize_t)record_ssl_error(sock);
     }
     return ret;
 }
@@ -342,6 +352,9 @@ static ssize_t _cb_ssl_read(trilogy_sock_t *_sock, void *buf, size_t nread)
         fprintf(stderr, "TRILOGY ssl_read: SSL error in queue\n");
         ERR_print_errors_fp(stderr);
     }
+    if (_sock->last_error.status != TRILOGY_OK) {
+        return _sock->last_error.status;
+    }
     struct trilogy_sock *sock = (struct trilogy_sock *)_sock;
     ssize_t data_read = (ssize_t)SSL_read(sock->ssl, buf, (int)nread);
     return ssl_io_return(sock, data_read);
@@ -349,6 +362,9 @@ static ssize_t _cb_ssl_read(trilogy_sock_t *_sock, void *buf, size_t nread)
 
 static ssize_t _cb_ssl_write(trilogy_sock_t *_sock, const void *buf, size_t nwrite)
 {
+    if (_sock->last_error.status != TRILOGY_OK) {
+        return _sock->last_error.status;
+    }
     if (ERR_peek_error()) {
         fprintf(stderr, "TRILOGY ssl_write: SSL error in queue\n");
         ERR_print_errors_fp(stderr);
@@ -382,7 +398,7 @@ static int _cb_ssl_close(trilogy_sock_t *_sock)
 {
     struct trilogy_sock *sock = (struct trilogy_sock *)_sock;
     if (sock->ssl != NULL) {
-        if (SSL_in_init(sock->ssl) == 0) {
+        if (sock->last_error->status == TRILOGY_OK && SSL_in_init(sock->ssl) == 0) {
             SSL_shutdown(sock->ssl);
 
             // Our callback API doesn't allow for reporting errors here, and to perform this properly we may need to
@@ -656,5 +672,6 @@ int trilogy_sock_upgrade_ssl(trilogy_sock_t *_sock)
 fail:
     SSL_free(sock->ssl);
     sock->ssl = NULL;
-    return TRILOGY_OPENSSL_ERR;
+
+    return record_ssl_error(sock);
 }

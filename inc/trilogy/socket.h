@@ -68,6 +68,12 @@ typedef struct {
     TRILOGY_CAPABILITIES_t flags;
 } trilogy_sockopt_t;
 
+typedef struct trilogy_errinfo_t {
+    int status;
+    unsigned long ssl_error;
+    int _errno;
+} trilogy_errinfo_t;
+
 typedef struct trilogy_sock_t {
     int (*connect_cb)(struct trilogy_sock_t *self);
     ssize_t (*read_cb)(struct trilogy_sock_t *self, void *buf, size_t nread);
@@ -78,6 +84,7 @@ typedef struct trilogy_sock_t {
     int (*fd_cb)(struct trilogy_sock_t *self);
 
     trilogy_sockopt_t opts;
+    trilogy_errinfo_t last_error;
 } trilogy_sock_t;
 
 static inline int trilogy_sock_connect(trilogy_sock_t *sock) { return sock->connect_cb(sock); }
