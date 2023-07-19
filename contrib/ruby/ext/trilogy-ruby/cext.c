@@ -35,9 +35,7 @@ struct trilogy_ctx {
 static void free_trilogy(void *ptr)
 {
     struct trilogy_ctx *ctx = ptr;
-    if (ctx->conn.socket != NULL) {
-        trilogy_free(&ctx->conn);
-    }
+    trilogy_free(&ctx->conn);
     xfree(ptr);
 }
 
