@@ -316,13 +316,39 @@ fail:
     return TRILOGY_ERR;
 }
 
+static int _cb_ssl_shutdown(trilogy_sock_t *_sock)
+{
+    struct trilogy_sock *sock = (struct trilogy_sock *)_sock;
+
+    // If we have an SSL socket, it's invalid here and
+    // we need to close it. The OpenSSL explicitly states
+    // not to call SSL_shutdown on a broken SSL socket.
+    SSL_free(sock->ssl);
+    // Reset the handlers since we tore down SSL, so we
+    // fall back to the regular methods for detecting
+    // we have a closed connection and for the cleanup.
+    sock->base.read_cb = _cb_raw_read;
+    sock->base.write_cb = _cb_raw_write;
+    sock->base.shutdown_cb = _cb_raw_shutdown;
+    sock->base.close_cb = _cb_raw_close;
+    sock->ssl = NULL;
+
+    return _cb_raw_shutdown(_sock);
+}
+
 static ssize_t ssl_io_return(struct trilogy_sock *sock, ssize_t ret)
 {
     if (ret <= 0) {
         int rc = SSL_get_error(sock->ssl, (int)ret);
         if (rc == SSL_ERROR_WANT_WRITE || rc == SSL_ERROR_WANT_READ) {
             return (ssize_t)TRILOGY_AGAIN;
-        } else if (rc == SSL_ERROR_SYSCALL && !ERR_peek_error()) {
+        }
+
+        /* After any other error it's invalid to perform another read/write or call SSL_shutdown. So we will free the
+         * SSL connecition and shutdown the underlying socket here */
+        _cb_ssl_shutdown(&sock->base);
+
+        if (rc == SSL_ERROR_SYSCALL && !ERR_peek_error()) {
             if (errno != 0) {
                 return (ssize_t)TRILOGY_SYSERR;
             } else if (ret == 0) {
@@ -356,26 +382,6 @@ static ssize_t _cb_ssl_write(trilogy_sock_t *_sock, const void *buf, size_t nwri
     struct trilogy_sock *sock = (struct trilogy_sock *)_sock;
     ssize_t data_written = (ssize_t)SSL_write(sock->ssl, buf, (int)nwrite);
     return ssl_io_return(sock, data_written);
-}
-
-static int _cb_ssl_shutdown(trilogy_sock_t *_sock)
-{
-    struct trilogy_sock *sock = (struct trilogy_sock *)_sock;
-
-    // If we have an SSL socket, it's invalid here and
-    // we need to close it. The OpenSSL explicitly states
-    // not to call SSL_shutdown on a broken SSL socket.
-    SSL_free(sock->ssl);
-    // Reset the handlers since we tore down SSL, so we
-    // fall back to the regular methods for detecting
-    // we have a closed connection and for the cleanup.
-    sock->base.read_cb = _cb_raw_read;
-    sock->base.write_cb = _cb_raw_write;
-    sock->base.shutdown_cb = _cb_raw_shutdown;
-    sock->base.close_cb = _cb_raw_close;
-    sock->ssl = NULL;
-
-    return _cb_raw_shutdown(_sock);
 }
 
 static int _cb_ssl_close(trilogy_sock_t *_sock)
