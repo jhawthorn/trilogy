@@ -346,7 +346,9 @@ static ssize_t ssl_io_return(struct trilogy_sock *sock, ssize_t ret)
 
         /* After any other error it's invalid to perform another read/write or call SSL_shutdown. So we will free the
          * SSL connecition and shutdown the underlying socket here */
+        int errno_was = errno;
         _cb_ssl_shutdown(&sock->base);
+        errno = errno_was;
 
         if (rc == SSL_ERROR_SYSCALL && !ERR_peek_error()) {
             if (errno != 0) {
