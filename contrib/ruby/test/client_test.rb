@@ -423,10 +423,12 @@ class ClientTest < TrilogyTest
     client = new_tcp_client
 
     refute_predicate client, :closed?
+    assert_predicate client, :connected?
 
     client.close
 
     assert_predicate client, :closed?
+    refute_predicate client, :connected?
   ensure
     ensure_closed client
   end
@@ -437,6 +439,8 @@ class ClientTest < TrilogyTest
     assert_raises Trilogy::TimeoutError do
       client.query("SELECT SLEEP(1)")
     end
+
+     refute_predicate client, :connected?
   ensure
     ensure_closed client
   end
@@ -449,6 +453,7 @@ class ClientTest < TrilogyTest
     assert_raises Trilogy::TimeoutError do
       client.query("SELECT SLEEP(1)")
     end
+     refute_predicate client, :connected?
   ensure
     ensure_closed client
   end
@@ -524,6 +529,7 @@ class ClientTest < TrilogyTest
     end
     assert_equal "Invalid date: 1234-00-00 00:00:00", err.message
 
+    refute_predicate client, :connected?
     err = assert_raises Trilogy::Error do
       client.ping
     end
@@ -543,6 +549,8 @@ class ClientTest < TrilogyTest
         client.query("SELECT SLEEP(1)")
       end
     end
+
+    refute_predicate client, :connected?
 
     err = assert_raises Trilogy::Error do
       client.query("SELECT varchar_test FROM trilogy_test WHERE int_test = 2").to_a
@@ -568,6 +576,8 @@ class ClientTest < TrilogyTest
         end
       end
 
+      refute_predicate client, :connected?
+
       err = assert_raises Trilogy::Error do
         client.query("SELECT 'hello'").to_a
       end
@@ -588,9 +598,12 @@ class ClientTest < TrilogyTest
     client_1.query("SELECT * FROM trilogy_test FOR UPDATE")
 
     client_2.query("SET SESSION innodb_lock_wait_timeout = 1;")
-    assert_raises Trilogy::TimeoutError do
+    ex = assert_raises Trilogy::TimeoutError do
       client_2.query("SELECT * FROM trilogy_test FOR UPDATE")
     end
+
+    assert_includes ex.message, "Lock wait timeout"
+    assert_predicate client_2, :connected?
   ensure
     ensure_closed(client_1)
     ensure_closed(client_2)
@@ -627,6 +640,7 @@ class ClientTest < TrilogyTest
     assert_includes err.message, "You have an error in your SQL syntax"
 
     # test that the connection is not closed due to 'routine' errors
+    assert_predicate client, :connected?
     assert client.ping
   ensure
     ensure_closed client
@@ -640,6 +654,8 @@ class ClientTest < TrilogyTest
         client.query("SELECT SLEEP(1)")
       end
     end
+
+    refute_predicate client, :connected?
 
     err = assert_raises Trilogy::Error do
       client.ping
@@ -665,6 +681,8 @@ class ClientTest < TrilogyTest
     assert_raises USR1 do
       client.query("SELECT SLEEP(1)")
     end
+
+    refute_predicate client, :connected?
   ensure
     Process.wait(pid)
     trap "USR1", old_usr1
