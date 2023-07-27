@@ -123,6 +123,9 @@ static void handle_trilogy_error(struct trilogy_ctx *ctx, int rc, const char *ms
 
     switch (rc) {
     case TRILOGY_SYSERR:
+        if (ctx->conn.socket != NULL) {
+            trilogy_sock_shutdown(ctx->conn.socket);
+        }
         trilogy_syserr_fail_str(errno, rbmsg);
 
     case TRILOGY_TIMEOUT:
