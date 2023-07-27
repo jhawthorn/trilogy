@@ -125,6 +125,9 @@ static void handle_trilogy_error(struct trilogy_ctx *ctx, int rc, const char *ms
     case TRILOGY_SYSERR:
         trilogy_syserr_fail_str(errno, rbmsg);
 
+    case TRILOGY_TIMEOUT:
+        rb_raise(Trilogy_TimeoutError, "%" PRIsVALUE, rbmsg);
+
     case TRILOGY_ERR: {
         VALUE message = rb_str_new(ctx->conn.error_message, ctx->conn.error_message_len);
         VALUE exc = rb_funcall(Trilogy_ProtocolError, id_from_code, 2, message, INT2NUM(ctx->conn.error_code));
@@ -181,8 +184,9 @@ static int flush_writes(struct trilogy_ctx *ctx)
             return rc;
         }
 
-        if (trilogy_sock_wait_write(ctx->conn.socket) < 0) {
-            rb_raise(Trilogy_TimeoutError, "trilogy_flush_writes");
+        rc = trilogy_sock_wait_write(ctx->conn.socket);
+        if (rc != TRILOGY_OK) {
+            return rc;
         }
     }
 }
@@ -232,10 +236,13 @@ static int _cb_ruby_wait(trilogy_sock_t *sock, trilogy_wait_t wait)
     }
 
     int fd = trilogy_sock_fd(sock);
-    if (rb_wait_for_single_fd(fd, wait_flag, timeout) <= 0)
+    int rc = rb_wait_for_single_fd(fd, wait_flag, timeout);
+    if (rc < 0)
         return TRILOGY_SYSERR;
+    if (rc == 0)
+        return TRILOGY_TIMEOUT;
 
-    return 0;
+    return TRILOGY_OK;
 }
 
 struct nogvl_sock_args {
@@ -287,8 +294,10 @@ escape the GVL on each wait operation without going through call_without_gvl */
             return rc;
         }
 
-        if (trilogy_sock_wait(ctx->conn.socket, TRILOGY_WAIT_HANDSHAKE) < 0)
-            return TRILOGY_TIMEOUT;
+        rc = trilogy_sock_wait(ctx->conn.socket, TRILOGY_WAIT_HANDSHAKE);
+        if (rc != TRILOGY_OK) {
+            return rc;
+        }
     }
 }
 
@@ -315,8 +324,9 @@ static void auth_switch(struct trilogy_ctx *ctx, trilogy_handshake_t *handshake)
             handle_trilogy_error(ctx, rc, "trilogy_auth_recv");
         }
 
-        if (trilogy_sock_wait_read(ctx->conn.socket) < 0) {
-            rb_raise(Trilogy_TimeoutError, "trilogy_auth_recv");
+        rc = trilogy_sock_wait_read(ctx->conn.socket);
+        if (rc != TRILOGY_OK) {
+            handle_trilogy_error(ctx, rc, "trilogy_auth_recv");
         }
     }
 }
@@ -368,8 +378,9 @@ static void authenticate(struct trilogy_ctx *ctx, trilogy_handshake_t *handshake
             handle_trilogy_error(ctx, rc, "trilogy_auth_recv");
         }
 
-        if (trilogy_sock_wait_read(ctx->conn.socket) < 0) {
-            rb_raise(Trilogy_TimeoutError, "trilogy_auth_recv");
+        rc = trilogy_sock_wait_read(ctx->conn.socket);
+        if (rc != TRILOGY_OK) {
+            handle_trilogy_error(ctx, rc, "trilogy_auth_recv");
         }
     }
 
@@ -566,8 +577,9 @@ static VALUE rb_trilogy_change_db(VALUE self, VALUE database)
             handle_trilogy_error(ctx, rc, "trilogy_change_db_recv");
         }
 
-        if (trilogy_sock_wait_read(ctx->conn.socket) < 0) {
-            rb_raise(Trilogy_TimeoutError, "trilogy_change_db_recv");
+        rc = trilogy_sock_wait_read(ctx->conn.socket);
+        if (rc != TRILOGY_OK) {
+            handle_trilogy_error(ctx, rc, "trilogy_change_db_recv");
         }
     }
 
@@ -599,8 +611,9 @@ static VALUE rb_trilogy_set_server_option(VALUE self, VALUE option)
             handle_trilogy_error(ctx, rc, "trilogy_set_option_recv");
         }
 
-        if (trilogy_sock_wait_read(ctx->conn.socket) < 0) {
-            rb_raise(Trilogy_TimeoutError, "trilogy_set_option_recv");
+        rc = trilogy_sock_wait_read(ctx->conn.socket);
+        if (rc != TRILOGY_OK) {
+            handle_trilogy_error(ctx, rc, "trilogy_set_option_recv");
         }
     }
 
@@ -676,8 +689,9 @@ static VALUE read_query_response(VALUE vargs)
             return read_query_error(args, rc, "trilogy_query_recv");
         }
 
-        if (trilogy_sock_wait_read(ctx->conn.socket) < 0) {
-            rb_raise(Trilogy_TimeoutError, "trilogy_query_recv");
+        rc = trilogy_sock_wait_read(ctx->conn.socket);
+        if (rc != TRILOGY_OK) {
+            handle_trilogy_error(ctx, rc, "trilogy_query_recv");
         }
     }
 
@@ -722,8 +736,9 @@ static VALUE read_query_response(VALUE vargs)
                 return read_query_error(args, rc, "trilogy_read_column");
             }
 
-            if (trilogy_sock_wait_read(ctx->conn.socket) < 0) {
-                rb_raise(Trilogy_TimeoutError, "trilogy_read_column");
+            rc = trilogy_sock_wait_read(ctx->conn.socket);
+            if (rc != TRILOGY_OK) {
+                return read_query_error(args, rc, "trilogy_read_column");
             }
         }
 
@@ -750,8 +765,9 @@ static VALUE read_query_response(VALUE vargs)
         int rc = trilogy_read_row(&ctx->conn, row_values);
 
         if (rc == TRILOGY_AGAIN) {
-            if (trilogy_sock_wait_read(ctx->conn.socket) < 0) {
-                rb_raise(Trilogy_TimeoutError, "trilogy_read_row");
+            rc = trilogy_sock_wait_read(ctx->conn.socket);
+            if (rc != TRILOGY_OK) {
+                return read_query_error(args, rc, "trilogy_read_row");
             }
             continue;
         }
@@ -886,8 +902,9 @@ static VALUE rb_trilogy_ping(VALUE self)
             handle_trilogy_error(ctx, rc, "trilogy_ping_recv");
         }
 
-        if (trilogy_sock_wait_read(ctx->conn.socket) < 0) {
-            rb_raise(Trilogy_TimeoutError, "trilogy_ping_recv");
+        rc = trilogy_sock_wait_read(ctx->conn.socket);
+        if (rc != TRILOGY_OK) {
+            handle_trilogy_error(ctx, rc, "trilogy_ping_recv");
         }
     }
 
