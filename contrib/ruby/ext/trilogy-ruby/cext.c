@@ -971,6 +971,37 @@ static VALUE rb_trilogy_discard(VALUE self)
     return Qfalse;
 }
 
+// Returns a best effort guess of whether the socket is valid and without error
+static VALUE rb_trilogy_connected_p(VALUE self)
+{
+    struct trilogy_ctx *ctx = get_ctx(self);
+
+    if (ctx->conn.socket == NULL) {
+        return Qfalse;
+    }
+
+    int fd = trilogy_sock_fd(ctx->conn.socket);
+    int error = 0;
+    socklen_t len = sizeof(error);
+    int retval = getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len);
+    if (retval && error) {
+        return Qfalse;
+    }
+
+    char byte;
+    ssize_t size = recv(fd, &byte, 1, MSG_PEEK);
+    if (size == 0) {
+        return Qfalse;
+    }
+
+    if (size > 0 || errno == EAGAIN || errno == EINTR || errno == EWOULDBLOCK) {
+        // As far as we know it's valid, but there's no guarantee. Many network errors will only be observed by a write
+        return Qtrue;
+    } else {
+        return Qfalse;
+    }
+}
+
 static VALUE rb_trilogy_last_insert_id(VALUE self) { return ULL2NUM(get_open_ctx(self)->conn.last_insert_id); }
 
 static VALUE rb_trilogy_affected_rows(VALUE self) { return ULL2NUM(get_open_ctx(self)->conn.affected_rows); }
@@ -1042,6 +1073,7 @@ RUBY_FUNC_EXPORTED void Init_cext()
     rb_define_method(Trilogy, "escape", rb_trilogy_escape, 1);
     rb_define_method(Trilogy, "close", rb_trilogy_close, 0);
     rb_define_method(Trilogy, "closed?", rb_trilogy_closed, 0);
+    rb_define_method(Trilogy, "connected?", rb_trilogy_connected_p, 0);
     rb_define_method(Trilogy, "discard!", rb_trilogy_discard, 0);
     rb_define_method(Trilogy, "last_insert_id", rb_trilogy_last_insert_id, 0);
     rb_define_method(Trilogy, "affected_rows", rb_trilogy_affected_rows, 0);
